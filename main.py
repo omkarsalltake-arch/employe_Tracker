@@ -1,6 +1,5 @@
 # Main.py
 
-
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
@@ -13,14 +12,14 @@ import os
 from fastapi.openapi.utils import get_openapi
 
 # ==========================================
-# 🔹 Load environment variables
+#  Load environment variables
 # ==========================================
 load_dotenv()
 
 app = FastAPI(title="Employee Tracker API with JWT Auth")
 
 # ==========================================
-# 🔹 MongoDB Connection
+#  MongoDB Connection
 # ==========================================
 MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DB = os.getenv("MONGO_DB")
@@ -30,14 +29,14 @@ db = client[MONGO_DB]
 users_collection = db["users"]
 
 # ==========================================
-# 🔹 JWT Config
+#  JWT Config
 # ==========================================
 SECRET_KEY = "super_secret_key_change_this"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 # ==========================================
-# 🔹 Models
+#  Models
 # ==========================================
 class UserRegister(BaseModel):
     username: str
@@ -51,14 +50,15 @@ class UserLogin(BaseModel):
 
 
 # ==========================================
-# 🔹 OAuth2 scheme (for token verification)
+#  OAuth2 scheme (for token verification)
 # ==========================================
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
+
 # ==========================================
-# 🔹 Helper: Create JWT Token
-# ==========================================
+#  Helper: Create JWT Token
+# ========================================== 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -67,7 +67,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 
 
 # ==========================================
-# 🔹 Helper: Verify JWT Token
+#  Helper: Verify JWT Token
 # ==========================================
 def verify_token(token: str = Depends(oauth2_scheme)):
     try:
@@ -81,7 +81,7 @@ def verify_token(token: str = Depends(oauth2_scheme)):
 
 
 # ==========================================
-# 🔹 Routes
+#  Routes
 # ==========================================
 @app.post("/api/auth/register")
 def register_user(user: UserRegister):
@@ -115,12 +115,12 @@ def protected_route(current_user: str = Depends(verify_token)):
 
 @app.get("/")
 def home():
-    return {"message": "Employee Tracker API is running ✅"}
+    return {"message": "Employee Tracker API is running ..."}
     
 
 
 # ==========================================
-# 🔹 Swagger UI with BearerAuth 🔒
+#  Swagger UI with BearerAuth 
 # ==========================================
 def custom_openapi():
     if app.openapi_schema:
@@ -141,7 +141,7 @@ def custom_openapi():
         }
     }
 
-    # 🔥 Important: This makes the lock icon work
+    #  Important: This makes the lock icon work
     openapi_schema["security"] = [{"bearerAuth": []}]
 
     app.openapi_schema = openapi_schema
@@ -150,3 +150,8 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
+
+
+
+
+
