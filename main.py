@@ -237,6 +237,16 @@ def verify_token(token: str = Depends(oauth2_scheme)):
 # ==========================================
 # Routes
 # ==========================================
+
+@app.get("/db-test")
+def db_test():
+    try:
+        users_collection.find_one({})
+        return {"status": "OK"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.post("/api/auth/register")
 def register_user(user: UserRegister):
     if users_collection.find_one({"email": user.email}):
@@ -291,6 +301,7 @@ def custom_openapi():
 
     # Make the lock icon work
     openapi_schema["security"] = [{"bearerAuth": []}]
+    
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
@@ -304,3 +315,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=port)
+
