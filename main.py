@@ -238,6 +238,12 @@ def verify_token(token: str = Depends(oauth2_scheme)):
 # Routes
 # ==========================================
 
+@app.get("/")
+def root():
+    return {"message": "Server is running on Render!"}
+
+
+
 @app.get("/db-test")
 def db_test():
     try:
