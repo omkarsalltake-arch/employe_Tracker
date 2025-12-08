@@ -167,6 +167,10 @@ from datetime import datetime, timedelta
 import bcrypt
 import os
 from fastapi.openapi.utils import get_openapi
+from fastapi import APIRouter
+
+dashboard_router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
+
 
 # ==========================================
 # Load environment variables
@@ -240,6 +244,7 @@ def verify_token(token: str = Depends(oauth2_scheme)):
 
 @app.get("/")
 def root():
+
     return {"message": "Server is running on Render!"}
 
 
@@ -284,6 +289,96 @@ def home():
     return {"message": "Employee Tracker API is running ..."}
 
 # ==========================================
+# Dashboard API
+# ==========================================
+
+dashboard_router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
+
+@dashboard_router.get("/", summary="Get Dashboard Analytics")
+def get_dashboard(current_user: str = Depends(verify_token)):
+    try:
+        # ============= Users Count =============
+        total_users = users_collection.count_documents({})
+
+        # ============= Restaurants Count =============
+        restaurants_collection = db["restaurants"]
+        total_restaurants = restaurants_collection.count_documents({})
+
+        # ============= Delivery Boys Count =============
+        delivery_collection = db["delivery_boys"]
+        total_delivery_boys = delivery_collection.count_documents({})
+
+        # ============= Orders Count =============
+        orders_collection = db["orders"]
+        total_orders = orders_collection.count_documents({})
+
+        pending_orders = orders_collection.count_documents({"status": "Pending"})
+        completed_orders = orders_collection.count_documents({"status": "Completed"})
+        cancelled_orders = orders_collection.count_documents({"status": "Cancelled"})
+
+        # ============= Revenue =============
+        pipeline_total = [
+            {"$match": {"status": "Completed"}},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+        ]
+        total_revenue_result = list(orders_collection.aggregate(pipeline_total))
+        total_revenue = total_revenue_result[0]["total"] if total_revenue_result else 0
+
+        # ============= Today's Stats =============
+        today_date = datetime.utcnow().date()
+
+        pipeline_today_orders = [
+            {
+                "$match": {
+                    "status": "Completed",
+                    "completed_at": {
+                        "$gte": datetime(today_date.year, today_date.month, today_date.day),
+                        "$lt": datetime(today_date.year, today_date.month, today_date.day) + timedelta(days=1)
+                    }
+                }
+            },
+            {"$group": {"_id": None, "total_today": {"$sum": "$amount"}}}
+        ]
+
+        today_orders_count = orders_collection.count_documents({
+            "created_at": {
+                "$gte": datetime(today_date.year, today_date.month, today_date.day),
+                "$lt": datetime(today_date.year, today_date.month, today_date.day) + timedelta(days=1)
+            }
+        })
+
+        today_revenue_result = list(orders_collection.aggregate(pipeline_today_orders))
+        today_revenue = today_revenue_result[0]["total_today"] if today_revenue_result else 0
+
+        return {
+            "message": "Dashboard data fetched successfully",
+            "data": {
+                "users": total_users,
+                "restaurants": total_restaurants,
+                "delivery_boys": total_delivery_boys,
+                "orders": {
+                    "total_orders": total_orders,
+                    "pending_orders": pending_orders,
+                    "completed_orders": completed_orders,
+                    "cancelled_orders": cancelled_orders,
+                },
+                "revenue": {
+                    "total_revenue": total_revenue,
+                    "today_orders": today_orders_count,
+                    "today_revenue": today_revenue,
+                }
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# IMPORTANT: include router BEFORE custom_openapi
+app.include_router(dashboard_router)
+
+
+# ==========================================
 # Swagger UI with BearerAuth
 # ==========================================
 def custom_openapi():
@@ -314,9 +409,9 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-# ==========================================
-# Run app (for local development)
-# ==========================================
+##  ==========================================
+##  Run app (for local development)
+##  ==========================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     import uvicorn
