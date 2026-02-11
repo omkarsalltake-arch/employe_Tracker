@@ -1,0 +1,70 @@
+from fastapi import APIRouter, Depends, HTTPException
+from db.mongo import users_collection
+from core.security import verify_token, hash_password, verify_password
+from models.auth_models import ChangePassword, ForgotPassword, ResetPassword
+
+router = APIRouter(prefix="/api/auth", tags=["Auth"])
+
+# ----------------------------------
+# GET /api/auth/me
+# ----------------------------------
+@router.get("/me")
+def get_current_user(current_user: str = Depends(verify_token)):
+    user = users_collection.find_one(
+        {"email": current_user},
+        {"password": 0}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+# ----------------------------------
+# PUT /api/auth/change-password
+# ----------------------------------
+@router.put("/change-password")
+def change_password(
+    data: ChangePassword,
+    current_user: str = Depends(verify_token)
+):
+    user = users_collection.find_one({"email": current_user})
+
+    if not verify_password(data.old_password, user["password"]):
+        raise HTTPException(status_code=400, detail="Old password incorrect")
+
+    users_collection.update_one(
+        {"email": current_user},
+        {"$set": {"password": hash_password(data.new_password)}}
+    )
+
+    return {"message": "Password updated successfully"}
+
+
+# ----------------------------------
+# POST /api/auth/forgot-password
+# ----------------------------------
+@router.post("/forgot-password")
+def forgot_password(data: ForgotPassword):
+    user = users_collection.find_one({"email": data.email})
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not registered")
+
+    # 🔔 Normally email token is sent here
+    return {"message": "Password reset link sent to email (mock)"}
+
+
+# ----------------------------------
+# POST /api/auth/reset-password
+# ----------------------------------
+@router.post("/reset-password")
+def reset_password(data: ResetPassword):
+    user = users_collection.find_one({"email": data.email})
+    if not user:
+        raise HTTPException(status_code=404, detail="Invalid request")
+
+    users_collection.update_one(
+        {"email": data.email},
+        {"$set": {"password": hash_password(data.new_password)}}
+    )
+
+    return {"message": "Password reset successful"}
