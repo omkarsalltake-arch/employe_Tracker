@@ -1,26 +1,44 @@
-# main.py
 
-# from fastapi import FastAPI, HTTPException, Depends, status
+# # solve this corrs error....
+
+# from fastapi import FastAPI, HTTPException, Depends
 # from fastapi.security import OAuth2PasswordBearer
+# from fastapi.middleware.cors import CORSMiddleware
 # from pydantic import BaseModel, EmailStr
 # from pymongo import MongoClient
 # from dotenv import load_dotenv
 # from jose import JWTError, jwt
 # from datetime import datetime, timedelta
+# from fastapi.openapi.utils import get_openapi
 # import bcrypt
 # import os
-# from fastapi.openapi.utils import get_openapi
-# from fastapi import APIRouter
-
-# dashboard_router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 
 # # ==========================================
-# # Load environment variables
+# # Load ENV
 # # ==========================================
 # load_dotenv()
 
-# app = FastAPI(title="Employee Tracker API with JWT Auth")
+# app = FastAPI(title="Employee Tracker API - Production Ready")
+
+# # ==========================================
+# # ✅ PERMANENT CORS FIX
+# # ==========================================
+
+# FRONTEND_URL = os.getenv("FRONTEND_URL")
+
+# origins = [
+#     FRONTEND_URL,              # Production frontend (Render/Vercel)
+#     "http://localhost:3000",   # Local development
+# ]
+
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=origins,
+#     allow_credentials=True,
+#     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+#     allow_headers=["Authorization", "Content-Type"],
+# )
 
 # # ==========================================
 # # MongoDB Connection
@@ -28,19 +46,23 @@
 # MONGO_URI = os.getenv("MONGO_URI")
 # MONGO_DB = os.getenv("MONGO_DB")
 
-# if not MONGO_URI or not MONGO_DB:
-#     raise RuntimeError("MONGO_URI or MONGO_DB environment variable not set!")
-
 # client = MongoClient(MONGO_URI)
 # db = client[MONGO_DB]
+
 # users_collection = db["users"]
+# restaurants_collection = db["restaurants"]
+# delivery_collection = db["delivery_boys"]
+# orders_collection = db["orders"]
+# blacklist_collection = db["token_blacklist"]
 
 # # ==========================================
 # # JWT Config
 # # ==========================================
-# SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_key_change_this")
+# SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_key")
 # ALGORITHM = "HS256"
 # ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 # # ==========================================
 # # Models
@@ -54,13 +76,23 @@
 #     email: EmailStr
 #     password: str
 
-# # ==========================================
-# # OAuth2 scheme (for token verification)
-# # ==========================================
-# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# class ChangePasswordModel(BaseModel):
+#     old_password: str
+#     new_password: str
+
+# class ForgotPasswordModel(BaseModel):
+#     email: EmailStr
+
+# class ResetPasswordModel(BaseModel):
+#     token: str
+#     new_password: str
+
+# class UserInfoResponse(BaseModel):
+#     username: str
+#     email: EmailStr
 
 # # ==========================================
-# # Helper: Create JWT Token
+# # Helpers
 # # ==========================================
 # def create_access_token(data: dict, expires_delta: timedelta = None):
 #     to_encode = data.copy()
@@ -68,221 +100,202 @@
 #     to_encode.update({"exp": expire})
 #     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# # ==========================================
-# # Helper: Verify JWT Token
-# # ==========================================
 # def verify_token(token: str = Depends(oauth2_scheme)):
 #     try:
 #         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-#         email: str = payload.get("sub")
+#         email = payload.get("sub")
 #         if not email:
-#             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+#             raise HTTPException(status_code=401, detail="Invalid token")
 #         return email
 #     except JWTError:
-#         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired or invalid")
+#         raise HTTPException(status_code=401, detail="Token expired or invalid")
 
 # # ==========================================
-# # Routes
+# # 1️⃣ Root
 # # ==========================================
-
 # @app.get("/")
 # def root():
+#     return {"message": "API Running Successfully 🚀"}
 
-#     return {"message": "Server is running on Render!"}
-
-
-
+# # ==========================================
+# # 2️⃣ DB Test
+# # ==========================================
 # @app.get("/db-test")
 # def db_test():
-#     try:
-#         users_collection.find_one({})
-#         return {"status": "OK"}
-#     except Exception as e:
-#         return {"error": str(e)}
+#     return {"status": "Database Connected"}
 
+# # ==========================================
+# # AUTH APIs
+# # ==========================================
 
+# # 3️⃣ Register
 # @app.post("/api/auth/register")
-# def register_user(user: UserRegister):
+# def register(user: UserRegister):
 #     if users_collection.find_one({"email": user.email}):
-#         raise HTTPException(status_code=400, detail="Email already registered")
-
-#     hashed_pw = bcrypt.hashpw(user.password.encode("utf-8"), bcrypt.gensalt())
+#         raise HTTPException(status_code=400, detail="Email already exists")
+#     hashed = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt())
 #     users_collection.insert_one({
 #         "username": user.username,
 #         "email": user.email,
-#         "password": hashed_pw.decode("utf-8")
+#         "password": hashed.decode()
 #     })
-#     return {"message": "User registered successfully", "email": user.email}
+#     return {"message": "User registered successfully"}
 
+# # 4️⃣ Login
 # @app.post("/api/auth/login")
-# def login_user(login: UserLogin):
-#     user = users_collection.find_one({"email": login.email})
-#     if not user or not bcrypt.checkpw(login.password.encode("utf-8"), user["password"].encode("utf-8")):
-#         raise HTTPException(status_code=401, detail="Invalid email or password")
+# def login(data: UserLogin):
+#     user = users_collection.find_one({"email": data.email})
+#     if not user or not bcrypt.checkpw(data.password.encode(), user["password"].encode()):
+#         raise HTTPException(status_code=401, detail="Invalid credentials")
+#     token = create_access_token({"sub": user["email"]})
+#     return {"access_token": token, "token_type": "bearer"}
 
-#     access_token = create_access_token(data={"sub": user["email"]})
-#     return {"message": "Login successful", "access_token": access_token, "token_type": "bearer"}
+# # 5️⃣ Logout
+# @app.post("/api/auth/logout")
+# def logout(token: str = Depends(oauth2_scheme)):
+#     blacklist_collection.insert_one({"token": token})
+#     return {"message": "Logged out successfully"}
 
-# @app.get("/api/protected", tags=["Protected"], summary="Protected API", description="Requires Bearer token")
-# def protected_route(current_user: str = Depends(verify_token)):
-#     return {"message": f"Welcome {current_user}, you have access to this protected route!"}
+# # 6️⃣ Change Password
+# @app.post("/api/auth/change-password")
+# def change_password(data: ChangePasswordModel, current_user: str = Depends(verify_token)):
+#     user = users_collection.find_one({"email": current_user})
+#     if not bcrypt.checkpw(data.old_password.encode(), user["password"].encode()):
+#         raise HTTPException(status_code=400, detail="Incorrect old password")
+#     new_hash = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt())
+#     users_collection.update_one({"email": current_user}, {"$set": {"password": new_hash.decode()}})
+#     return {"message": "Password changed successfully"}
 
-# @app.get("/")
-# def home():
-#     return {"message": "Employee Tracker API is running ..."}
+# # 7️⃣ Forgot Password
+# @app.post("/api/auth/forgot-password")
+# def forgot_password(data: ForgotPasswordModel):
+#     user = users_collection.find_one({"email": data.email})
+#     if not user:
+#         raise HTTPException(status_code=404, detail="Email not found")
+#     reset_token = create_access_token({"sub": data.email}, timedelta(hours=1))
+#     return {"reset_token": reset_token}
 
-# # ==========================================
-# # Dashboard API
-# # ==========================================
+# # 8️⃣ Reset Password
+# @app.post("/api/auth/reset-password")
+# def reset_password(data: ResetPasswordModel):
+#     payload = jwt.decode(data.token, SECRET_KEY, algorithms=[ALGORITHM])
+#     email = payload.get("sub")
+#     new_hash = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt())
+#     users_collection.update_one({"email": email}, {"$set": {"password": new_hash.decode()}})
+#     return {"message": "Password reset successfully"}
 
-# dashboard_router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
-
-# @dashboard_router.get("/", summary="Get Dashboard Analytics")
-# def get_dashboard(current_user: str = Depends(verify_token)):
-#     try:
-#         # ============= Users Count =============
-#         total_users = users_collection.count_documents({})
-
-#         # ============= Restaurants Count =============
-#         restaurants_collection = db["restaurants"]
-#         total_restaurants = restaurants_collection.count_documents({})
-
-#         # ============= Delivery Boys Count =============
-#         delivery_collection = db["delivery_boys"]
-#         total_delivery_boys = delivery_collection.count_documents({})
-
-#         # ============= Orders Count =============
-#         orders_collection = db["orders"]
-#         total_orders = orders_collection.count_documents({})
-
-#         pending_orders = orders_collection.count_documents({"status": "Pending"})
-#         completed_orders = orders_collection.count_documents({"status": "Completed"})
-#         cancelled_orders = orders_collection.count_documents({"status": "Cancelled"})
-
-#         # ============= Revenue =============
-#         pipeline_total = [
-#             {"$match": {"status": "Completed"}},
-#             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
-#         ]
-#         total_revenue_result = list(orders_collection.aggregate(pipeline_total))
-#         total_revenue = total_revenue_result[0]["total"] if total_revenue_result else 0
-
-#         # ============= Today's Stats =============
-#         today_date = datetime.utcnow().date()
-
-#         pipeline_today_orders = [
-#             {
-#                 "$match": {
-#                     "status": "Completed",
-#                     "completed_at": {
-#                         "$gte": datetime(today_date.year, today_date.month, today_date.day),
-#                         "$lt": datetime(today_date.year, today_date.month, today_date.day) + timedelta(days=1)
-#                     }
-#                 }
-#             },
-#             {"$group": {"_id": None, "total_today": {"$sum": "$amount"}}}
-#         ]
-
-#         today_orders_count = orders_collection.count_documents({
-#             "created_at": {
-#                 "$gte": datetime(today_date.year, today_date.month, today_date.day),
-#                 "$lt": datetime(today_date.year, today_date.month, today_date.day) + timedelta(days=1)
-#             }
-#         })
-
-#         today_revenue_result = list(orders_collection.aggregate(pipeline_today_orders))
-#         today_revenue = today_revenue_result[0]["total_today"] if today_revenue_result else 0
-
-#         return {
-#             "message": "Dashboard data fetched successfully",
-#             "data": {
-#                 "users": total_users,
-#                 "restaurants": total_restaurants,
-#                 "delivery_boys": total_delivery_boys,
-#                 "orders": {
-#                     "total_orders": total_orders,
-#                     "pending_orders": pending_orders,
-#                     "completed_orders": completed_orders,
-#                     "cancelled_orders": cancelled_orders,
-#                 },
-#                 "revenue": {
-#                     "total_revenue": total_revenue,
-#                     "today_orders": today_orders_count,
-#                     "today_revenue": today_revenue,
-#                 }
-#             }
-  
-#         }
-
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-
-
-# # IMPORTANT: include router BEFORE custom_openapi
-# app.include_router(dashboard_router)
-
+# # 9️⃣ User Info
+# @app.get("/api/auth/user-info", response_model=UserInfoResponse)
+# def user_info(current_user: str = Depends(verify_token)):
+#     user = users_collection.find_one({"email": current_user})
+#     return {"username": user["username"], "email": user["email"]}
 
 # # ==========================================
-# # Swagger UI with BearerAuth
+# # 1️⃣0️⃣ Protected
+# # ==========================================
+# @app.get("/api/protected")
+# def protected(current_user: str = Depends(verify_token)):
+#     return {"message": f"Welcome {current_user}"}
+
+# # ==========================================
+# # 1️⃣1️⃣ Dashboard
+# # ==========================================
+# @app.get("/api/dashboard")
+# def dashboard(current_user: str = Depends(verify_token)):
+#     return {
+#         "users": users_collection.count_documents({}),
+#         "restaurants": restaurants_collection.count_documents({}),
+#         "delivery_boys": delivery_collection.count_documents({}),
+#         "orders": orders_collection.count_documents({})
+#     }
+
+# # ==========================================
+# # 1️⃣2️⃣ List Restaurants
+# # ==========================================
+# @app.get("/api/restaurants")
+# def list_restaurants():
+#     return {"restaurants": list(restaurants_collection.find({}, {"_id": 0}))}
+
+# # ==========================================
+# # 1️⃣3️⃣ List Orders
+# # ==========================================
+# @app.get("/api/orders")
+# def list_orders():
+#     return {"orders": list(orders_collection.find({}, {"_id": 0}))}
+
+# # ==========================================
+# # Swagger Bearer Support
 # # ==========================================
 # def custom_openapi():
 #     if app.openapi_schema:
 #         return app.openapi_schema
 
-#     openapi_schema = get_openapi(
-#         title=app.title,
+#     schema = get_openapi(
+#         title="Omkar API Documentation",
 #         version="1.0.0",
-#         description="Employee Tracker API with JWT Authentication (Swagger UI supports Bearer Token)",
+#         description="13 APIs with JWT + Production CORS",
 #         routes=app.routes,
 #     )
 
-#     openapi_schema["components"]["securitySchemes"] = {
+#     schema["components"]["securitySchemes"] = {
 #         "bearerAuth": {
 #             "type": "http",
 #             "scheme": "bearer",
-#             "bearerFormat": "JWT",
+#             "bearerFormat": "JWT"
 #         }
 #     }
 
-#     # Make the lock icon work
-#     openapi_schema["security"] = [{"bearerAuth": []}]
-    
-
-#     app.openapi_schema = openapi_schema
+#     schema["security"] = [{"bearerAuth": []}]
+#     app.openapi_schema = schema
 #     return app.openapi_schema
 
 # app.openapi = custom_openapi
 
-# ##  ==========================================
-# ##  Run app (for local development)
-# ##  ==========================================
-# if __name__ == "__main__":
-#     port = int(os.environ.get("PORT", 10000))
-#     import uvicorn
-#     uvicorn.run(app, host="0.0.0.0", port=port)
 
 
+# new updated code with date 17/02/2026 time  6.25
 
-# date  8 december  code
-
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
+from fastapi.openapi.utils import get_openapi
 import bcrypt
 import os
-from fastapi.openapi.utils import get_openapi
-from fastapi import APIRouter
 
 # ==========================================
-# Load .env
+# Load ENV
 # ==========================================
 load_dotenv()
 
-app = FastAPI(title="Employee Tracker API with JWT Auth")
+app = FastAPI(title="Employee Tracker API - Production Ready")
+
+# ==========================================
+# ✅ PERMANENT SMART CORS FIX
+# ==========================================
+
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+
+if FRONTEND_URL:
+    allowed_origins.append(FRONTEND_URL)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ==========================================
 # MongoDB Connection
@@ -290,15 +303,17 @@ app = FastAPI(title="Employee Tracker API with JWT Auth")
 MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DB = os.getenv("MONGO_DB")
 
-if not MONGO_URI or not MONGO_DB:
-    raise RuntimeError("MONGO_URI or MONGO_DB is missing")
-
 client = MongoClient(MONGO_URI)
 db = client[MONGO_DB]
+
 users_collection = db["users"]
+restaurants_collection = db["restaurants"]
+delivery_collection = db["delivery_boys"]
+orders_collection = db["orders"]
+blacklist_collection = db["token_blacklist"]
 
 # ==========================================
-# JWT Settings
+# JWT Config
 # ==========================================
 SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_key")
 ALGORITHM = "HS256"
@@ -318,12 +333,29 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class ChangePasswordModel(BaseModel):
+    old_password: str
+    new_password: str
+
+class ForgotPasswordModel(BaseModel):
+    email: EmailStr
+
+class ResetPasswordModel(BaseModel):
+    token: str
+    new_password: str
+
+class UserInfoResponse(BaseModel):
+    username: str
+    email: EmailStr
+
 # ==========================================
 # Helpers
 # ==========================================
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -332,153 +364,169 @@ def verify_token(token: str = Depends(oauth2_scheme)):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
         if not email:
-            raise HTTPException(status_code=401, detail="Invalid token data")
+            raise HTTPException(status_code=401, detail="Invalid token")
         return email
     except JWTError:
         raise HTTPException(status_code=401, detail="Token expired or invalid")
 
 # ==========================================
-# Root Route
+# 1️⃣ Root
 # ==========================================
 @app.get("/")
 def root():
-    return {"message": "Employee Tracker API is running ..."}
+    return {"message": "API Running Successfully 🚀"}
 
 # ==========================================
-# DB Test
+# 2️⃣ DB Test
 # ==========================================
 @app.get("/db-test")
 def db_test():
-    try:
-        users_collection.find_one({})
-        return {"status": "OK"}
-    except Exception as e:
-        return {"error": str(e)}
+    return {"status": "Database Connected"}
 
 # ==========================================
-# Auth Routes
+# AUTH APIs
 # ==========================================
+
+# 3️⃣ Register
 @app.post("/api/auth/register")
-def register_user(user: UserRegister):
+def register(user: UserRegister):
     if users_collection.find_one({"email": user.email}):
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    hashed = bcrypt.hashpw(user.password.encode("utf-8"), bcrypt.gensalt())
+    hashed = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt())
+
     users_collection.insert_one({
         "username": user.username,
         "email": user.email,
         "password": hashed.decode()
     })
-    return {"message": "User registered", "email": user.email}
 
+    return {"message": "User registered successfully"}
+
+# 4️⃣ Login
 @app.post("/api/auth/login")
-def login_user(login: UserLogin):
-    user = users_collection.find_one({"email": login.email})
-    if not user or not bcrypt.checkpw(login.password.encode(), user["password"].encode()):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+def login(data: UserLogin):
+    user = users_collection.find_one({"email": data.email})
+
+    if not user or not bcrypt.checkpw(
+        data.password.encode(),
+        user["password"].encode()
+    ):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token({"sub": user["email"]})
-    return {"message": "Login successful", "access_token": token, "token_type": "bearer"}
 
-# ==========================================
-# Protected Route
-# ==========================================
-@app.get("/api/protected", tags=["Protected"])
+    return {"access_token": token, "token_type": "bearer"}
+
+# 5️⃣ Logout
+@app.post("/api/auth/logout")
+def logout(token: str = Depends(oauth2_scheme)):
+    blacklist_collection.insert_one({"token": token})
+    return {"message": "Logged out successfully"}
+
+# 6️⃣ Change Password
+@app.post("/api/auth/change-password")
+def change_password(
+    data: ChangePasswordModel,
+    current_user: str = Depends(verify_token)
+):
+    user = users_collection.find_one({"email": current_user})
+
+    if not bcrypt.checkpw(
+        data.old_password.encode(),
+        user["password"].encode()
+    ):
+        raise HTTPException(status_code=400, detail="Incorrect old password")
+
+    new_hash = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt())
+
+    users_collection.update_one(
+        {"email": current_user},
+        {"$set": {"password": new_hash.decode()}}
+    )
+
+    return {"message": "Password changed successfully"}
+
+# 7️⃣ Forgot Password
+@app.post("/api/auth/forgot-password")
+def forgot_password(data: ForgotPasswordModel):
+    user = users_collection.find_one({"email": data.email})
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    reset_token = create_access_token(
+        {"sub": data.email},
+        timedelta(hours=1)
+    )
+
+    return {"reset_token": reset_token}
+
+# 8️⃣ Reset Password
+@app.post("/api/auth/reset-password")
+def reset_password(data: ResetPasswordModel):
+    payload = jwt.decode(data.token, SECRET_KEY, algorithms=[ALGORITHM])
+    email = payload.get("sub")
+
+    new_hash = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt())
+
+    users_collection.update_one(
+        {"email": email},
+        {"$set": {"password": new_hash.decode()}}
+    )
+
+    return {"message": "Password reset successfully"}
+
+# 9️⃣ User Info
+@app.get("/api/auth/user-info", response_model=UserInfoResponse)
+def user_info(current_user: str = Depends(verify_token)):
+    user = users_collection.find_one({"email": current_user})
+    return {"username": user["username"], "email": user["email"]}
+
+# 1️⃣0️⃣ Protected
+@app.get("/api/protected")
 def protected(current_user: str = Depends(verify_token)):
-    return {"message": f"Welcome {current_user}!"}
+    return {"message": f"Welcome {current_user}"}
+
+# 1️⃣1️⃣ Dashboard
+@app.get("/api/dashboard")
+def dashboard(current_user: str = Depends(verify_token)):
+    return {
+        "users": users_collection.count_documents({}),
+        "restaurants": restaurants_collection.count_documents({}),
+        "delivery_boys": delivery_collection.count_documents({}),
+        "orders": orders_collection.count_documents({})
+    }
+
+# 1️⃣2️⃣ List Restaurants
+@app.get("/api/restaurants")
+def list_restaurants():
+    return {
+        "restaurants": list(
+            restaurants_collection.find({}, {"_id": 0})
+        )
+    }
+
+# 1️⃣3️⃣ List Orders
+@app.get("/api/orders")
+def list_orders():
+    return {
+        "orders": list(
+            orders_collection.find({}, {"_id": 0})
+        )
+    }
 
 # ==========================================
-# Dashboard Router
-# ==========================================
-dashboard_router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
-
-@dashboard_router.get("/", summary="Get Dashboard Analytics")
-def get_dashboard(current_user: str = Depends(verify_token)):
-    try:
-        total_users = users_collection.count_documents({})
-
-        restaurants = db["restaurants"]
-        delivery = db["delivery_boys"]
-        orders = db["orders"]
-
-        total_restaurants = restaurants.count_documents({})
-        total_delivery_boys = delivery.count_documents({})
-        total_orders = orders.count_documents({})
-
-        pending_orders = orders.count_documents({"status": "Pending"})
-        completed_orders = orders.count_documents({"status": "Completed"})
-        cancelled_orders = orders.count_documents({"status": "Cancelled"})
-
-        # Revenue
-        pipeline = [
-            {"$match": {"status": "Completed"}},
-            {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
-        ]
-        revenue_result = list(orders.aggregate(pipeline))
-        total_revenue = revenue_result[0]["total"] if revenue_result else 0
-
-        today = datetime.utcnow().date()
-
-        today_orders = orders.count_documents({
-            "created_at": {
-                "$gte": datetime(today.year, today.month, today.day),
-                "$lt": datetime(today.year, today.month, today.day) + timedelta(days=1)
-            }
-        })
-
-        today_rev_pipeline = [
-            {
-                "$match": {
-                    "status": "Completed",
-                    "completed_at": {
-                        "$gte": datetime(today.year, today.month, today.day),
-                        "$lt": datetime(today.year, today.month, today.day) + timedelta(days=1)
-                    }
-                }
-            },
-            {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
-        ]
-
-        today_rev_res = list(orders.aggregate(today_rev_pipeline))
-        today_revenue = today_rev_res[0]["total"] if today_rev_res else 0
-
-        return {
-            "message": "Dashboard loaded",
-            "data": {
-                "users": total_users,
-                "restaurants": total_restaurants,
-                "delivery_boys": total_delivery_boys,
-                "orders": {
-                    "total": total_orders,
-                    "pending": pending_orders,
-                    "completed": completed_orders,
-                    "cancelled": cancelled_orders,
-                },
-                "revenue": {
-                    "total_revenue": total_revenue,
-                    "today_orders": today_orders,
-                    "today_revenue": today_revenue,
-                }
-            }
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Register router
-app.include_router(dashboard_router)
-
-# ==========================================
-# Swagger Customization
+# Swagger Bearer Support
 # ==========================================
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
 
     schema = get_openapi(
-        title="Employee Tracker API with JWT",
+        title="Omkar API Documentation",
         version="1.0.0",
-        description="Swagger with JWT Bearer Auth",
+        description="13 APIs with JWT + Permanent Smart CORS",
         routes=app.routes,
     )
 
@@ -488,7 +536,6 @@ def custom_openapi():
             "scheme": "bearer",
             "bearerFormat": "JWT"
         }
-        
     }
 
     schema["security"] = [{"bearerAuth": []}]
@@ -497,10 +544,6 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-# ==========================================
-# Run Local
-# ==========================================
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 10000))
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+
